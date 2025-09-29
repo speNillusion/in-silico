@@ -7,8 +7,6 @@ import logging
 from typing import List, Optional, Any, Tuple
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
 from PIL import Image
 import argparse
 from dotenv import load_dotenv
@@ -18,6 +16,8 @@ try:
     import google.generativeai as genai
 except ImportError:
     genai = None
+
+import json
 
 load_dotenv()
 
@@ -32,7 +32,7 @@ class GeminiClient:
         self.api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
         if self.api_key and genai:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel("gemini-1.5-flash")  # Supports vision
+            self.model = genai.GenerativeModel("gemini-2.5-flash")  # Updated to valid model
         else:
             logging.warning("No API key or library found. Using mock mode.")
             self.model = None
@@ -110,8 +110,11 @@ def analyze_plastic_degradation(image_paths: List[str]) -> str:
 class Pipeline:
     """Pipeline for processing and analyzing candidates."""
 
+    def __init__(self) -> None:
+        self.client = GeminiClient()
+
     def ingest_sources(self, dataset_path: Optional[str] = None) -> pd.DataFrame:
-        """Ingest data from sources.
+        """Ingest data from sources using AI if no file provided.
 
         Args:
             dataset_path: Optional path to CSV file.
@@ -121,17 +124,28 @@ class Pipeline:
         """
         if dataset_path and os.path.exists(dataset_path):
             return pd.read_csv(dataset_path)
-        # Placeholder for real API calls (e.g., UniProt, NASA, PDB, AlphaFold)
-        # Insert API calls here, e.g., requests.get('https://api.uniprot.org/...')
-        logging.info("Using synthetic data as placeholder.")
-        return pd.DataFrame({
-            "id": range(10),
-            "sequence": ["ACDEFGHIKLMNPQRSTVWY" * 5 for _ in range(10)],
-            "env_temp": np.random.uniform(20, 60, 10),
-        })
+        
+        prompt = (
+            "Generate 10 synthetic candidates for plastic degradation study. "
+            "Each candidate should have 'id' (int), 'sequence' (str), 'env_temp' (float). "
+            "Respond in JSON format as a list of dictionaries."
+        )
+        response = self.client.generate_text(prompt)
+        
+        try:
+            data = json.loads(response)
+            return pd.DataFrame(data)
+        except (json.JSONDecodeError, Exception) as e:
+            logging.error(f"Failed to parse AI response: {e}")
+            # Fallback synthetic data
+            return pd.DataFrame({
+                "id": range(10),
+                "sequence": ["ACDEFGHIKLMNPQRSTVWY" * 5 for _ in range(10)],
+                "env_temp": np.random.uniform(20, 60, 10),
+            })
 
     def feature_engineering(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Engineer features from the dataframe.
+        """Engineer features using AI.
 
         Args:
             df: Input DataFrame.
@@ -139,76 +153,66 @@ class Pipeline:
         Returns:
             DataFrame with added features.
         """
-        if "sequence" in df.columns:
-            df["length"] = df["sequence"].str.len()
-            def aa_composition(seq: str) -> dict[str, float]:
-                total = len(seq)
-                return {aa: count / total for aa, count in Counter(seq).items()}
-            comp_df = pd.DataFrame(df["sequence"].apply(aa_composition).tolist()).fillna(0)
-            df = pd.concat([df, comp_df], axis=1)
-        if "env_temp" in df.columns:
-            df["env_temp_mean"] = df["env_temp"]
-        return df
+        df_json = df.to_json(orient='records')
+        prompt = (
+            f"Given this data: {df_json}, engineer additional features such as sequence length, "
+            "amino acid composition, and any other relevant features for plastic degradation analysis. "
+            "Respond in JSON format as a list of dictionaries with the updated data."
+        )
+        response = self.client.generate_text(prompt)
+        
+        try:
+            updated_data = json.loads(response)
+            return pd.DataFrame(updated_data)
+        except (json.JSONDecodeError, Exception) as e:
+            logging.error(f"Failed to parse AI response: {e}")
+            # Fallback simple engineering
+            if "sequence" in df.columns:
+                df["length"] = df["sequence"].str.len()
+            if "env_temp" in df.columns:
+                df["env_temp_mean"] = df["env_temp"]
+            return df
 
-    def train_surrogate(self, features: pd.DataFrame, labels: pd.Series, use_mock: bool = False) -> Any:
-        """Train a surrogate model.
-
-        Args:
-            features: Feature DataFrame.
-            labels: Target labels.
-            use_mock: If True, return a mock model.
-
-        Returns:
-            Trained model or mock.
-        """
-        if use_mock or features.empty:
-            class MockModel:
-                def predict(self, X: pd.DataFrame) -> np.ndarray:
-                    return np.random.uniform(0, 1, len(X))
-            return MockModel()
-        model = RandomForestRegressor(n_estimators=50, random_state=42)
-        model.fit(features, labels)
-        return model
-
-    def predict_with_uncertainty(self, model: Any, X: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
-        """Predict with uncertainty estimation.
+    def prioritize_candidates(self, df: pd.DataFrame, k: int = 5) -> Tuple[List[int], pd.Series, str]:
+        """Prioritize candidates using AI analysis.
 
         Args:
-            model: Trained model.
-            X: Input features.
-
-        Returns:
-            Mean predictions and standard deviations.
-        """
-        if hasattr(model, "predict") and hasattr(model, "estimators_"):
-            tree_preds = np.array([tree.predict(X) for tree in model.estimators_])
-            mean = pd.Series(np.mean(tree_preds, axis=0))
-            std = pd.Series(np.std(tree_preds, axis=0))
-            return mean, std
-        preds = pd.Series(model.predict(X))
-        return preds, pd.Series([0.0] * len(preds))
-
-    def acquisition_function(self, preds_mean: pd.Series, preds_std: pd.Series, k: int = 5) -> List[int]:
-        """Acquisition function to select top candidates.
-
-        Args:
-            preds_mean: Mean predictions.
-            preds_std: Standard deviations.
+            df: DataFrame with features.
             k: Number of top candidates.
 
         Returns:
-            List of top indices.
+            List of top indices, scores, and justifications string.
         """
-        # Simple Expected Improvement approximation: mean + std
-        ei = preds_mean + preds_std
-        return ei.nlargest(k).index.tolist()
+        df_json = df.to_json(orient='records')
+        prompt = (
+            f"Analyze this data for plastic degradation potential: {df_json}. "
+            f"Select the top {k} candidates, provide their ids (assuming 0-based index if not specified), "
+            "scores (0-1 float), and a justification paragraph. "
+            "Respond in JSON: {'top_indices': [int], 'scores': [float], 'justifications': str}"
+        )
+        response = self.client.generate_text(prompt)
+        
+        try:
+            result = json.loads(response)
+            top_ids = result['top_indices']
+            scores = pd.Series(result['scores'])
+            justifications = result['justifications']
+            return top_ids, scores, justifications
+        except (json.JSONDecodeError, KeyError, Exception) as e:
+            logging.error(f"Failed to parse AI response: {e}")
+            # Fallback dummy
+            top_ids = list(range(min(k, len(df))))
+            scores = pd.Series(np.random.uniform(0.5, 1.0, len(top_ids)))
+            justifications = "Mock justifications: Prioritized based on simulated AI analysis."
+            return top_ids, scores, justifications
 
-    def generate_report(self, candidates: pd.DataFrame, scores: pd.Series, out_path: str = "output") -> None:
+    def generate_report(self, candidates: pd.DataFrame, scores: pd.Series, justifications: str, out_path: str = "output") -> None:
         """Generate report and save to files.
 
         Args:
             candidates: DataFrame of candidates.
             scores: Scores for candidates.
+            justifications: Justification text from AI.
             out_path: Output directory.
         """
         os.makedirs(out_path, exist_ok=True)
@@ -219,8 +223,9 @@ class Pipeline:
             f.write("# Pipeline Report\n\n")
             f.write("## Top Candidates\n\n")
             f.write(report_df.to_markdown(index=False))
-            f.write("\n\n## Justifications\nPrioritized based on predicted performance and uncertainty.\n")
-            f.write("References: [Placeholder for public sources]\n")
+            f.write("\n\n## Justifications\n")
+            f.write(justifications)
+            f.write("\n\nReferences: [Placeholder for public sources]\n")
 
 class AgentOrchestrator:
     """Orchestrates the pipeline execution."""
@@ -230,21 +235,16 @@ class AgentOrchestrator:
         self.logger = logging.getLogger(__name__)
 
     def run(self, dataset: Optional[str] = None) -> None:
-        """Run the pipeline.
+        """Run the pipeline using AI.
 
         Args:
             dataset: Optional dataset path.
         """
         df = self.pipeline.ingest_sources(dataset)
         features = self.pipeline.feature_engineering(df)
-        # Assume dummy labels for demonstration (in real, use labeled data)
-        labels = pd.Series(np.random.uniform(0, 1, len(features)))  # Placeholder
-        model = self.pipeline.train_surrogate(features.drop(columns=["id"], errors="ignore"), labels)
-        mean, std = self.pipeline.predict_with_uncertainty(model, features)
-        top_ids = self.pipeline.acquisition_function(mean, std)
-        top_df = df.iloc[top_ids]
-        top_scores = mean.iloc[top_ids]
-        self.pipeline.generate_report(top_df, top_scores)
+        top_ids, scores, justifications = self.pipeline.prioritize_candidates(features)
+        top_df = features.iloc[top_ids]
+        self.pipeline.generate_report(top_df, scores, justifications)
         self.logger.info(f"Top candidates selected: {top_ids}")
 
 if __name__ == "__main__":

@@ -4,18 +4,18 @@
 Este projeto é apenas computacional. Não contém instruções de laboratório nem protocolos para manipulação de organismos. Não tente realizar procedimentos de cultura, manipulação ou liberação de microrganismos com base neste código. Consulte sempre especialistas e normas de biossegurança.
 
 ## Descrição
-Este é um protótipo computacional que utiliza a API Gemini para análise de imagens e um pipeline de machine learning para priorização de candidatos em degradação de plásticos. Ele encapsula chamadas à API, gerencia fluxos de dados e fornece uma interface CLI simples.
+Este é um protótipo computacional que utiliza a API Gemini para análise de imagens e um pipeline impulsionado por IA para priorização de candidatos em degradação de plásticos. Ele encapsula chamadas à API, gerencia fluxos de dados e fornece uma interface CLI simples.
 ---
-* O protótipo avalia a degradação do plástico e gera recomendações computacionais.
+* O protótipo avalia a degradação do plástico e gera recomendações computacionais usando IA generativa.
 
 ### 2. Pipeline de Prioridade de Candidatos
 
 ```bash
-python prototype.py --sample-run
+python prototype.py run-sim
 ```
 
-* Gera dataset sintético de 10 candidatos.
-* Executa ingestion → features → surrogate → acquisition → relatório.
+* Gera dataset sintético de 10 candidatos usando IA.
+* Executa ingestion → features → priorização → relatório, tudo impulsionado por Gemini AI.
 * Saídas:
 
   * `output/top_candidates.csv`: ranking computacional.
@@ -28,7 +28,7 @@ pytest -q
 ```
 
 * Testa funções críticas em modo offline/mocks.
-* Verifica geração de features, acquisition function e análise de imagens.
+* Verifica geração de features, priorização e análise de imagens.
 
 ---
 
@@ -47,21 +47,18 @@ GOOGLE_API_KEY=your_key_here
 USE_MOCKS=true
 ```
 
-* `GOOGLE_API_KEY`: chave da Gemini (opcional, use mocks se não tiver).
-* `USE_MOCKS=true`: ativa modo offline/simulado.
+* `GOOGLE_API_KEY`: chave da Gemini (necessária para chamadas reais; use uma chave válida para evitar fallbacks).
+* `USE_MOCKS=true`: ativa modo offline/simulado. Defina como false para usar chamadas reais à API.
 
 ---
 
 ## 🛠 Tecnologias e Bibliotecas
 
 * **Linguagem:** Python 3.10+
-* **IA e ML:** Gemini (google-generativeai), scikit-learn, LightGBM, XGBoost
-* **Manipulação de dados:** pandas, Biopython
+* **IA:** Gemini (google-generativeai)
+* **Manipulação de dados:** pandas
 * **Visão computacional:** Pillow
-* **Otimização / Active Learning:** Optuna, BoTorch
-* **Orquestração / Agente:** LangChain-style (microserviço)
-* **Testes:** pytest, unittest.mock
-* **MLOps:** placeholders para MLflow/W&B
+* **Testes:** pytest
 
 ---
 
@@ -71,26 +68,18 @@ USE_MOCKS=true
 
 * Abstrai chamadas para IA generativa e visão computacional.
 * Aceita imagens PIL ou caminhos de arquivo.
-* Retorna texto estruturado com recomendações e análise de degradação.
+* Retorna texto estruturado com recomendações e análise de degradação, incluindo tipo de plástico.
 
 ### Pipeline
 
-* Feature Engineering:
-
-  * Sequência de aminoácidos → composição, propriedades, motifs.
-  * Dados ambientais → temperatura, pH.
-  * Dados de plástico → tipo, densidade, cristalinidade.
-* Modelos surrogate:
-
-  * RandomForest / LightGBM → estimativa de taxa e incerteza.
-* Função de aquisição:
-
-  * Seleção top-k candidatos com melhor trade-off exploração/exploração.
+* Feature Engineering: Usando Gemini AI para extrair e gerar features.
+* Priorização de Candidatos: Usando IA para selecionar top candidatos.
+* Geração de Relatório: Relatórios gerados por IA.
 
 ### AgentOrchestrator
 
 * Mantém loop completo com logging.
-* Atualiza modelo quando novos dados experimentais são inseridos (simulados).
+* Usa Gemini AI para todas as etapas do pipeline.
 
 ---
 
@@ -117,13 +106,13 @@ project-root/
 ### Executar análise de imagens
 
 ```bash
-python prototype.py --analyze-images samples/img1.jpg samples/img2.jpg
+python prototype.py analyze-images samples/img1.jpg samples/img2.jpg
 ```
 
 ### Rodar pipeline completo com dataset sintético
 
 ```bash
-python prototype.py --sample-run
+python prototype.py run-sim
 ```
 
 ### Executar testes
@@ -140,16 +129,15 @@ pytest -q
 * Métricas disponíveis:
 
   * Número de candidatos processados.
-  * Scores preditivos e incerteza.
-* Possível integração futura com MLflow ou W&B (placeholders no código).
+  * Scores e justificativas gerados por IA.
 
 ---
 
 ## 📝 Notas Importantes
 
 * Este protótipo é **100% computacional** e **não substitui ensaios laboratoriais**.
-* Todas as análises são **simulações baseadas em dados públicos**.
-* Para integração com laboratórios, use os relatórios para **priorizar candidatos** sem instruções experimentais diretas.
+* Todas as análises são **simulações baseadas em IA**.
+* Para chamadas reais à API, certifique-se de que GOOGLE_API_KEY é válida; caso contrário, o sistema fará fallback para dados sintéticos.
 * Sempre siga normas de biossegurança quando trabalhar com experimentos reais.
 
 ---
@@ -165,10 +153,8 @@ pytest -q
 
 ## 🏆 Próximos Passos
 
-* Substituir dataset sintético por dados reais de literatura e APIs.
-* Integrar métricas reais de degradação.
-* Expansão do agente orquestrador com LangChain/Prefect para pipelines escaláveis.
-* Adicionar análise visual de curvas de degradação simuladas.
+* Integrar dados reais de literatura e APIs.
+* Expansão do agente orquestrador para pipelines escaláveis.
 
 ---
 
