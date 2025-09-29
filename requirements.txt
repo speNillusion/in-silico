@@ -1,0 +1,7 @@
+google-generativeai
+python-dotenv
+Pillow
+pandas
+scikit-learn
+lightgbm
+pytest
