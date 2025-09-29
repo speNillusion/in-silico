@@ -78,7 +78,15 @@ class GeminiClient:
             except Exception as e:
                 logging.error(f"Error analyzing images: {e}")
                 return "Error in image analysis."
-        return f"Mock analysis for images: {', '.join(valid_paths)}"
+        return (
+            "Mock Analysis:\n"
+            "Plastic Type: PET (Polyethylene Terephthalate)\n"
+            "Evaluation: Moderate degradation observed.\n"
+            "Estimated Degradation Rate: 5% per month.\n"
+            "Visible Changes: Color fading and surface cracks.\n"
+            "Computational Recommendations: Run further simulations with temperature variations.\n"
+            "References: [Placeholder]"
+        )
 
 def analyze_plastic_degradation(image_paths: List[str]) -> str:
     """Analyze images for plastic degradation.
@@ -91,8 +99,9 @@ def analyze_plastic_degradation(image_paths: List[str]) -> str:
     """
     client = GeminiClient()
     prompt = (
-        "Analyze these sequential images for plastic degradation over time. "
-        "Provide sections: evaluation, estimated degradation rate (if possible), "
+        "First, identify and classify the type of plastic in the images (e.g., PET, HDPE, PVC, etc.). "
+        "Then, analyze these sequential images for plastic degradation over time. "
+        "Provide sections: plastic type, evaluation, estimated degradation rate (if possible), "
         "visible changes, and computational recommendations. "
         "Cite public sources where appropriate (placeholders for references)."
     )

@@ -199,7 +199,7 @@ python src/prototype.py run-sim --dataset sample.csv  # Opcional: forneça um ca
 ```
 
 ### Analisar Imagens para Degradação de Plásticos
-Analisa imagens fornecidas e retorna/salva a análise.
+Analisa imagens fornecidas, incluindo identificação e tipificação do tipo de plástico (ex: PET, HDPE, etc.), e retorna/salva a análise.
 ```
 python src/prototype.py analyze-images samples/img1.jpg samples/img2.jpg samples/img3.jpg
 ```

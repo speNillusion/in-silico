@@ -94,6 +94,14 @@ def test_analyze_plastic_degradation_with_nonexistent_images(mock_client_class):
     # Verify result
     assert result == "Mock analysis result"
 
+@patch.dict(os.environ, {"USE_MOCKS": "true"})
+@patch("os.path.exists", return_value=True)
+def test_analyze_plastic_degradation_mock_includes_type(mock_exists):
+    """Test that analyze_plastic_degradation mock response includes plastic type."""
+    result = analyze_plastic_degradation(["mock.jpg"])
+    assert "Plastic Type" in result
+    assert "Evaluation" in result
+
 
 if __name__ == "__main__":
     pytest.main()
